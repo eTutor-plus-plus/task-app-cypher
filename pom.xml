@@ -11,7 +11,7 @@
     </parent>
 
     <groupId>at.jku.dke.etutor</groupId>
-    <artifactId>task-app-binary-search</artifactId>
+    <artifactId>task-app-cypher</artifactId>
     <version>1.0.3</version>
 
     <name>eTutor Task-App: Binary Search</name>
