@@ -1,106 +1,76 @@
 package at.jku.dke.task_app.cypher.data.entities;
 
 import at.jku.dke.etutor.task_app.data.entities.BaseTaskGroup;
-import at.jku.dke.etutor.task_app.dto.TaskStatus;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Table;
 import jakarta.validation.constraints.NotNull;
 
-/**
- * Represents a cypher task group.
- * <p>
- * It is also possible to create tasks without task types. Tasks of type cypher would not need a task group.
- * Here a task group is only used for demonstration purposes.
- */
 @Entity
 @Table(name = "task_group")
 public class CypherTaskGroup extends BaseTaskGroup {
     @NotNull
-    @Column(name = "min_number", nullable = false)
-    private Integer minNumber;
+    @Column(name = "setup_statements", nullable = false, columnDefinition = "TEXT")
+    private String setupStatements;
 
     @NotNull
-    @Column(name = "max_number", nullable = false)
-    private Integer maxNumber;
+    @Column(name = "secondary_setup_statements", nullable = false, columnDefinition = "TEXT")
+    private String secondarySetupStatements;
 
-    /**
-     * Creates a new instance of class {@link CypherTaskGroup}.
-     */
+    @Column(name = "image_base64_de", columnDefinition = "TEXT")
+    private String imageBase64De;
+
+    @Column(name = "image_base64_en", columnDefinition = "TEXT")
+    private String imageBase64En;
+
+    @Column(name = "image_truncated", nullable = false)
+    private boolean imageTruncated;
+
     public CypherTaskGroup() {
     }
 
-    /**
-     * Creates a new instance of class {@link CypherTaskGroup}.
-     *
-     * @param minNumber The minimum number.
-     * @param maxNumber The maximum number.
-     */
-    public CypherTaskGroup(Integer minNumber, Integer maxNumber) {
-        this.minNumber = minNumber;
-        this.maxNumber = maxNumber;
+    public CypherTaskGroup(String setupStatements, String secondarySetupStatements) {
+        this.setupStatements = setupStatements;
+        this.secondarySetupStatements = secondarySetupStatements;
     }
 
-    /**
-     * Creates a new instance of class {@link CypherTaskGroup}.
-     *
-     * @param status    The status.
-     * @param minNumber The minimum number.
-     * @param maxNumber The maximum number.
-     */
-    public CypherTaskGroup(TaskStatus status, Integer minNumber, Integer maxNumber) {
-        super(status);
-        this.minNumber = minNumber;
-        this.maxNumber = maxNumber;
+    public String getSetupStatements() {
+        return setupStatements;
     }
 
-    /**
-     * Creates a new instance of class {@link CypherTaskGroup}.
-     *
-     * @param id        The id.
-     * @param status    The status.
-     * @param minNumber The minimum number.
-     * @param maxNumber The maximum number.
-     */
-    public CypherTaskGroup(Long id, TaskStatus status, Integer minNumber, Integer maxNumber) {
-        super(id, status);
-        this.minNumber = minNumber;
-        this.maxNumber = maxNumber;
+    public void setSetupStatements(String setupStatements) {
+        this.setupStatements = setupStatements;
     }
 
-    /**
-     * Gets the minimum number.
-     *
-     * @return The minimum number.
-     */
-    public Integer getMinNumber() {
-        return minNumber;
+    public String getSecondarySetupStatements() {
+        return secondarySetupStatements;
     }
 
-    /**
-     * Sets the minimum number.
-     *
-     * @param minNumber The minimum number.
-     */
-    public void setMinNumber(Integer minNumber) {
-        this.minNumber = minNumber;
+    public void setSecondarySetupStatements(String secondarySetupStatements) {
+        this.secondarySetupStatements = secondarySetupStatements;
     }
 
-    /**
-     * Gets the maximum number.
-     *
-     * @return The maximum number.
-     */
-    public Integer getMaxNumber() {
-        return maxNumber;
+    public String getImageBase64De() {
+        return imageBase64De;
     }
 
-    /**
-     * Sets the maximum number.
-     *
-     * @param maxNumber The maximum number.
-     */
-    public void setMaxNumber(Integer maxNumber) {
-        this.maxNumber = maxNumber;
+    public void setImageBase64De(String imageBase64De) {
+        this.imageBase64De = imageBase64De;
+    }
+
+    public String getImageBase64En() {
+        return imageBase64En;
+    }
+
+    public void setImageBase64En(String imageBase64En) {
+        this.imageBase64En = imageBase64En;
+    }
+
+    public boolean isImageTruncated() {
+        return imageTruncated;
+    }
+
+    public void setImageTruncated(boolean imageTruncated) {
+        this.imageTruncated = imageTruncated;
     }
 }

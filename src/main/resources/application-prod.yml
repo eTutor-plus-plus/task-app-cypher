@@ -23,12 +23,22 @@ spring:
 ## Database
 #spring:
 #  datasource:
-#    url: jdbc:postgresql://localhost:5434/etutor_binary_search
+#    url: jdbc:postgresql://localhost:5434/etutor_cypher
 #    username: etutor
 #    password: TBD
 #  flyway:
-#    user: etutor_binary_search_admin
+#    user: etutor_cypher_admin
 #    password: TBD
+#
+## Neo4j evaluation database
+#cypher:
+#  neo4j:
+#    uri: bolt://localhost:7687
+#    username: neo4j
+#    password: TBD
+#    database: neo4j
+#    query-timeout: 10s
+#    max-rows: 1000
 #
 ## API key definition
 #clients:

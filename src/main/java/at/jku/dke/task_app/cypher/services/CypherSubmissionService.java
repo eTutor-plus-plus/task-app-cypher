@@ -11,21 +11,11 @@ import at.jku.dke.task_app.cypher.dto.CypherSubmissionDto;
 import at.jku.dke.task_app.cypher.evaluation.EvaluationService;
 import org.springframework.stereotype.Service;
 
-/**
- * This class provides methods for managing {@link CypherSubmission}s.
- */
 @Service
 public class CypherSubmissionService extends BaseSubmissionService<CypherTask, CypherSubmission, CypherSubmissionDto> {
 
     private final EvaluationService evaluationService;
 
-    /**
-     * Creates a new instance of class {@link CypherSubmissionService}.
-     *
-     * @param submissionRepository The input repository.
-     * @param taskRepository       The task repository.
-     * @param evaluationService    The evaluation service.
-     */
     public CypherSubmissionService(CypherSubmissionRepository submissionRepository, CypherTaskRepository taskRepository, EvaluationService evaluationService) {
         super(submissionRepository, taskRepository);
         this.evaluationService = evaluationService;

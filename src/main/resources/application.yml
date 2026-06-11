@@ -84,3 +84,13 @@ management:
           - metrics
           - livenessstate
           - readinessstate
+
+# Cypher evaluation
+cypher:
+  neo4j:
+    uri: bolt://localhost:7687
+    username: neo4j
+    password: secretpassword
+    database: neo4j
+    query-timeout: 10s
+    max-rows: 1000
