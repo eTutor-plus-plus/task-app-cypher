@@ -66,7 +66,7 @@ public class CypherTaskService extends BaseTaskInGroupService<CypherTask, Cypher
             data.missingRowsPenalty(),
             data.superfluousRowsPenalty(),
             data.wrongOrderPenalty(),
-            normalize(data.expectedColumnNames()));
+            this.resolveExpectedColumnNames(data.expectedColumnNames(), primarySolution));
         task.setEvaluationMode(mode);
         if (mode == CypherEvaluationMode.MULTI_SOLUTION)
             task.replaceAlternativeSolutions(data.alternativeSolutionsOrEmpty());
@@ -90,7 +90,7 @@ public class CypherTaskService extends BaseTaskInGroupService<CypherTask, Cypher
         task.setMissingRowsPenalty(data.missingRowsPenalty());
         task.setSuperfluousRowsPenalty(data.superfluousRowsPenalty());
         task.setWrongOrderPenalty(data.wrongOrderPenalty());
-        task.setExpectedColumnNames(normalize(data.expectedColumnNames()));
+        task.setExpectedColumnNames(this.resolveExpectedColumnNames(data.expectedColumnNames(), primarySolution));
         if (mode == CypherEvaluationMode.MULTI_SOLUTION)
             task.replaceAlternativeSolutions(data.alternativeSolutionsOrEmpty());
         else
@@ -146,7 +146,7 @@ public class CypherTaskService extends BaseTaskInGroupService<CypherTask, Cypher
         try {
             return this.queryAnalyzer.analyze(task.getSolution());
         } catch (RuntimeException ex) {
-            LOG.debug("Could not analyze solution for description: {}", ex.getMessage());
+            LOG.warn("Could not analyze solution for description: {}", ex.getMessage());
             return null;
         }
     }
@@ -167,8 +167,20 @@ public class CypherTaskService extends BaseTaskInGroupService<CypherTask, Cypher
         try {
             return this.columnExtractor.extractColumnNames(task.getSolution());
         } catch (CypherValidationException ex) {
-            LOG.debug("Could not auto-derive RETURN columns from solution: {}", ex.getMessage());
+            LOG.warn("Could not auto-derive RETURN columns from solution: {}", ex.getMessage());
             return List.of();
+        }
+    }
+
+    private String resolveExpectedColumnNames(String manual, String solution) {
+        String normalized = normalize(manual);
+        if (normalized != null)
+            return normalized;
+        try {
+            return String.join(", ", this.columnExtractor.extractColumnNames(solution));
+        } catch (CypherValidationException ex) {
+            LOG.warn("Could not auto-derive RETURN columns from solution: {}", ex.getMessage());
+            return null;
         }
     }
 

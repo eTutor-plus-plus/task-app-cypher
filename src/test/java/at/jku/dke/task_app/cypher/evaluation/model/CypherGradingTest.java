@@ -66,7 +66,7 @@ class CypherGradingTest {
     }
 
     @Test
-    void wrongOrderDeductsOnlyWhenRowsAreOtherwiseCorrect() {
+    void wrongOrderDeductsConfiguredPercentage() {
         var task = task(percent(20), percent(30), percent(40), percent(10));
         var solution = result(List.of("name"), List.of(row("Alice"), row("Bob")));
         var submission = result(List.of("name"), List.of(row("Bob"), row("Alice")));
@@ -75,6 +75,33 @@ class CypherGradingTest {
 
         assertEquals(0, points("9.00").compareTo(grading.getPoints()));
         assertEquals(CypherEvaluationCriterion.CORRECT_ORDER, grading.getDetails().get(0).criterion());
+    }
+
+    @Test
+    void superfluousRowsAndWrongOrderDeductBothPenalties() {
+        var task = task(percent(20), percent(30), percent(50), percent(50));
+        var solution = result(List.of("name"), List.of(row("Bob"), row("Alice")));
+        var submission = result(List.of("name"), List.of(row("Alice"), row("Bob"), row("Carol")));
+
+        var grading = CypherGrading.of(task, new CypherComparison(solution, submission, true));
+
+        assertEquals(0, BigDecimal.ZERO.compareTo(grading.getPoints()));
+        assertEquals(2, grading.getDetails().size());
+        assertEquals(CypherEvaluationCriterion.SUPERFLUOUS_ROWS, grading.getDetails().get(0).criterion());
+        assertEquals(CypherEvaluationCriterion.CORRECT_ORDER, grading.getDetails().get(1).criterion());
+    }
+
+    @Test
+    void superfluousRowsWithPreservedOrderDoNotDeductOrderPenalty() {
+        var task = task(percent(20), percent(30), percent(40), percent(10));
+        var solution = result(List.of("name"), List.of(row("Alice"), row("Bob")));
+        var submission = result(List.of("name"), List.of(row("Alice"), row("Bob"), row("Carol")));
+
+        var grading = CypherGrading.of(task, new CypherComparison(solution, submission, true));
+
+        assertEquals(0, points("6.00").compareTo(grading.getPoints()));
+        assertEquals(1, grading.getDetails().size());
+        assertEquals(CypherEvaluationCriterion.SUPERFLUOUS_ROWS, grading.getDetails().get(0).criterion());
     }
 
     @Test

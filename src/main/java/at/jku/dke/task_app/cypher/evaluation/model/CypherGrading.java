@@ -40,7 +40,7 @@ public final class CypherGrading {
             if (!comparison.superfluousRows().isEmpty())
                 entries.add(new Entry(CypherEvaluationCriterion.SUPERFLUOUS_ROWS,
                     resolvePenalty(task.getSuperfluousRowsPenalty(), task.getMaxPoints())));
-            if (comparison.rowsCorrect() && comparison.orderRelevant() && !comparison.orderCorrect())
+            if (comparison.orderRelevant() && !comparison.orderCorrect())
                 entries.add(new Entry(CypherEvaluationCriterion.CORRECT_ORDER,
                     resolvePenalty(task.getWrongOrderPenalty(), task.getMaxPoints())));
         }

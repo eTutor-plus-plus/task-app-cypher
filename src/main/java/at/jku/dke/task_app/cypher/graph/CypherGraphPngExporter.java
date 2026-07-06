@@ -227,7 +227,7 @@ public final class CypherGraphPngExporter {
             g.drawOval(x - NODE_RADIUS, y - NODE_RADIUS, NODE_RADIUS * 2, NODE_RADIUS * 2);
 
             g.setFont(nodeFont);
-            g.setColor(textColorOn(fill));
+            g.setColor(Color.BLACK);
             String label = nodeLabel(node);
             int textWidth = fm.stringWidth(label);
             g.drawString(label, x - textWidth / 2, y + fm.getAscent() / 2 - 2);
@@ -278,10 +278,5 @@ public final class CypherGraphPngExporter {
             if (entry.getValue() instanceof String) return entry.getValue();
         }
         return null;
-    }
-
-    private static Color textColorOn(Color fill) {
-        double luminance = (0.299 * fill.getRed() + 0.587 * fill.getGreen() + 0.114 * fill.getBlue()) / 255.0;
-        return luminance > 0.6 ? Color.BLACK : Color.WHITE;
     }
 }

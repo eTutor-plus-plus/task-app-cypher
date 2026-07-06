@@ -3,10 +3,14 @@ package at.jku.dke.task_app.cypher.syntax;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @Component
 public class CypherQueryAnalyzer {
@@ -17,6 +21,8 @@ public class CypherQueryAnalyzer {
 
     private static final Set<String> AGGREGATION_FUNCTIONS = Set.of(
         "COUNT", "SUM", "AVG", "MIN", "MAX", "COLLECT", "STDEV", "STDEVP", "PERCENTILECONT", "PERCENTILEDISC");
+
+    private static final Pattern PROPERTY_ACCESS = Pattern.compile("^([A-Za-z_][A-Za-z0-9_]*)\\.([A-Za-z_][A-Za-z0-9_]*)$");
 
     public CypherQueryStructure analyze(String query) {
         if (query == null || query.isBlank())
@@ -29,7 +35,9 @@ public class CypherQueryAnalyzer {
         List<CypherQueryStructure.RelationshipPattern> relationships = new ArrayList<>();
         Set<String> seenRels = new LinkedHashSet<>();
         List<String> filters = new ArrayList<>();
-        List<CypherQueryStructure.OrderItem> orderBy = new ArrayList<>();
+        Map<String, String> varEntities = new HashMap<>();
+        List<RawExpressionItem> rawReturnItems = new ArrayList<>();
+        List<RawExpressionItem> rawOrderItems = new ArrayList<>();
 
         boolean distinct = false;
         boolean aggregated = false;
@@ -39,18 +47,20 @@ public class CypherQueryAnalyzer {
 
         for (Clause clause : clauses) {
             switch (clause.keyword()) {
-                case "MATCH" -> parsePattern(clause.body(), nodes, seenNodes, relationships, seenRels, filters);
+                case "MATCH" -> parsePattern(clause.body(), nodes, seenNodes, relationships, seenRels, filters, varEntities);
                 case "WHERE" -> addFilter(filters, humanize(clause.body()));
                 case "RETURN" -> {
                     distinct = startsWithKeyword(clause.body(), "DISTINCT");
                     if (containsAggregation(clause.body())) aggregated = true;
+                    rawReturnItems.clear();
+                    rawReturnItems.addAll(parseReturnItems(clause.body()));
                 }
                 case "WITH" -> {
                     if (containsAggregation(clause.body())) aggregated = true;
                 }
                 case "ORDER_BY" -> {
-                    orderBy.clear();
-                    orderBy.addAll(parseOrderBy(clause.body()));
+                    rawOrderItems.clear();
+                    rawOrderItems.addAll(parseOrderBy(clause.body()));
                 }
                 case "SKIP" -> skip = collapse(clause.body());
                 case "LIMIT" -> limit = collapse(clause.body());
@@ -59,14 +69,30 @@ public class CypherQueryAnalyzer {
             }
         }
 
+        // Entities are resolved after all clauses are processed, so that variables are known
+        // regardless of the clause order (e.g. UNION parts).
+        List<CypherQueryStructure.ReturnItem> returnItems = rawReturnItems.stream()
+            .map(raw -> new CypherQueryStructure.ReturnItem(raw.expression(), resolveEntity(varEntities, raw.variable()), raw.alias()))
+            .toList();
+        List<CypherQueryStructure.OrderItem> orderBy = rawOrderItems.stream()
+            .map(raw -> new CypherQueryStructure.OrderItem(raw.expression(), resolveEntity(varEntities, raw.variable()), raw.descending()))
+            .toList();
+
         return new CypherQueryStructure(
             List.copyOf(nodes), List.copyOf(relationships), List.copyOf(filters),
-            distinct, aggregated, List.copyOf(orderBy),
+            distinct, aggregated, returnItems, orderBy,
             blankToNull(skip), blankToNull(limit), union);
     }
 
     private static CypherQueryStructure empty() {
-        return new CypherQueryStructure(List.of(), List.of(), List.of(), false, false, List.of(), null, null, false);
+        return new CypherQueryStructure(List.of(), List.of(), List.of(), false, false, List.of(), List.of(), null, null, false);
+    }
+
+    private static String resolveEntity(Map<String, String> varEntities, String variable) {
+        return variable == null ? null : varEntities.get(variable);
+    }
+
+    private record RawExpressionItem(String expression, String variable, String alias, boolean descending) {
     }
 
     private record Clause(String keyword, String body) {
@@ -189,7 +215,7 @@ public class CypherQueryAnalyzer {
     private static void parsePattern(String body,
                                      List<CypherQueryStructure.NodePattern> nodes, Set<String> seenNodes,
                                      List<CypherQueryStructure.RelationshipPattern> rels, Set<String> seenRels,
-                                     List<String> filters) {
+                                     List<String> filters, Map<String, String> varEntities) {
         int n = body.length();
         int i = 0;
         List<String> prevLabels = null;
@@ -212,9 +238,10 @@ public class CypherQueryAnalyzer {
                 String inner = body.substring(i + 1, close);
                 List<String> labels = parseLabelsAndProps(inner, filters, true);
                 addNode(nodes, seenNodes, labels);
+                registerVariable(varEntities, inner, labels, ":");
 
                 if (prevLabels != null && connector.length() > 0)
-                    addRelationship(rels, seenRels, filters, connector.toString(), prevLabels, labels);
+                    addRelationship(rels, seenRels, filters, connector.toString(), prevLabels, labels, varEntities);
 
                 prevLabels = labels;
                 connector.setLength(0);
@@ -239,7 +266,8 @@ public class CypherQueryAnalyzer {
     }
 
     private static void addRelationship(List<CypherQueryStructure.RelationshipPattern> rels, Set<String> seen,
-                                        List<String> filters, String connector, List<String> left, List<String> right) {
+                                        List<String> filters, String connector, List<String> left, List<String> right,
+                                        Map<String, String> varEntities) {
         boolean incoming = connector.indexOf("<") >= 0;
         boolean outgoing = connector.indexOf(">") >= 0;
         boolean directed = incoming ^ outgoing;
@@ -248,9 +276,32 @@ public class CypherQueryAnalyzer {
         List<String> target = incoming && !outgoing ? left : right;
 
         List<String> types = relationshipTypes(connector, filters);
+        int open = connector.indexOf('[');
+        int close = connector.lastIndexOf(']');
+        if (open >= 0 && close > open)
+            registerVariable(varEntities, connector.substring(open + 1, close), types, "|");
         String key = String.join("|", types) + "@" + String.join(":", source) + "->" + String.join(":", target) + "/" + directed;
         if (seen.add(key))
             rels.add(new CypherQueryStructure.RelationshipPattern(types, source, target, directed));
+    }
+
+    private static void registerVariable(Map<String, String> varEntities, String patternInner, List<String> entityNames, String separator) {
+        if (entityNames.isEmpty())
+            return;
+        String variable = leadingIdentifier(patternInner);
+        if (variable != null)
+            varEntities.putIfAbsent(variable, String.join(separator, entityNames));
+    }
+
+    private static String leadingIdentifier(String patternInner) {
+        int i = 0;
+        int n = patternInner.length();
+        while (i < n && Character.isWhitespace(patternInner.charAt(i))) i++;
+        int start = i;
+        while (i < n && isWordChar(patternInner.charAt(i))) i++;
+        return i > start && (i >= n || !isWordChar(patternInner.charAt(i))) && !Character.isDigit(patternInner.charAt(start))
+            ? patternInner.substring(start, i)
+            : null;
     }
 
     private static List<String> relationshipTypes(String connector, List<String> filters) {
@@ -336,8 +387,8 @@ public class CypherQueryAnalyzer {
         return labels;
     }
 
-    private static List<CypherQueryStructure.OrderItem> parseOrderBy(String body) {
-        List<CypherQueryStructure.OrderItem> items = new ArrayList<>();
+    private static List<RawExpressionItem> parseOrderBy(String body) {
+        List<RawExpressionItem> items = new ArrayList<>();
         for (String raw : splitTopLevelCommas(body)) {
             String item = raw.trim();
             if (item.isEmpty()) continue;
@@ -349,9 +400,58 @@ public class CypherQueryAnalyzer {
             } else if (upper.endsWith(" ASC") || upper.endsWith(" ASCENDING")) {
                 item = item.substring(0, item.lastIndexOf(' ')).trim();
             }
-            items.add(new CypherQueryStructure.OrderItem(stripVariablePrefixes(item), descending));
+            Matcher propertyAccess = PROPERTY_ACCESS.matcher(item);
+            if (propertyAccess.matches())
+                items.add(new RawExpressionItem(propertyAccess.group(2), propertyAccess.group(1), null, descending));
+            else
+                items.add(new RawExpressionItem(stripVariablePrefixes(item), null, null, descending));
         }
         return items;
+    }
+
+    private static List<RawExpressionItem> parseReturnItems(String body) {
+        String cleaned = collapse(body);
+        if (cleaned == null || cleaned.isEmpty())
+            return List.of();
+        if (startsWithKeyword(cleaned, "DISTINCT"))
+            cleaned = cleaned.substring("DISTINCT".length()).trim();
+
+        List<RawExpressionItem> items = new ArrayList<>();
+        for (String raw : splitTopLevelCommas(cleaned)) {
+            String part = raw.trim();
+            if (part.isEmpty()) continue;
+
+            String expression = part;
+            String alias = null;
+            Word as = lastTopLevelAs(part);
+            if (as != null) {
+                expression = part.substring(0, as.start()).trim();
+                alias = unquoteBackticks(part.substring(as.end()).trim());
+                if (alias.isEmpty()) alias = null;
+            }
+
+            Matcher propertyAccess = PROPERTY_ACCESS.matcher(expression);
+            if (propertyAccess.matches())
+                items.add(new RawExpressionItem(propertyAccess.group(2), propertyAccess.group(1), alias, false));
+            else
+                items.add(new RawExpressionItem(collapse(stripVariablePrefixes(expression)), null, alias, false));
+        }
+        return items;
+    }
+
+    private static Word lastTopLevelAs(String part) {
+        Word as = null;
+        for (Word word : topLevelWords(part)) {
+            if (word.upper().equals("AS"))
+                as = word;
+        }
+        return as;
+    }
+
+    private static String unquoteBackticks(String text) {
+        if (text.length() >= 2 && text.charAt(0) == '`' && text.charAt(text.length() - 1) == '`')
+            return text.substring(1, text.length() - 1).replace("``", "`");
+        return text;
     }
 
     private static String humanize(String predicate) {

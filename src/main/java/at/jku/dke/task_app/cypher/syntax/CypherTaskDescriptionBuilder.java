@@ -80,14 +80,17 @@ public class CypherTaskDescriptionBuilder {
     private void appendReturn(StringBuilder sb, Locale locale, CypherQueryStructure structure, List<String> columns) {
         boolean distinct = structure != null && structure.distinct();
         boolean aggregated = structure != null && structure.aggregated();
-        if (columns.isEmpty() && !distinct && !aggregated)
+        List<CypherQueryStructure.ReturnItem> items = structure == null ? List.of() : structure.returnItems();
+        if (columns.isEmpty() && items.isEmpty() && !distinct && !aggregated)
             return;
 
         StringBuilder content = new StringBuilder();
-        if (columns.isEmpty())
-            content.append(message(locale, "task.return.result"));
-        else
+        if (!items.isEmpty())
+            content.append(message(locale, "task.return.columns", returnItemList(locale, items, columns)));
+        else if (!columns.isEmpty())
             content.append(message(locale, "task.return.columns", columnList(columns)));
+        else
+            content.append(message(locale, "task.return.result"));
 
         if (distinct)
             content.append(" ").append(message(locale, "task.return.distinct"));
@@ -96,12 +99,32 @@ public class CypherTaskDescriptionBuilder {
         appendListItem(sb, locale, "task.section.return", content.toString());
     }
 
+    private String returnItemList(Locale locale, List<CypherQueryStructure.ReturnItem> items, List<String> columns) {
+        boolean useColumns = columns.size() == items.size();
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < items.size(); i++) {
+            if (i > 0) sb.append(", ");
+            CypherQueryStructure.ReturnItem item = items.get(i);
+            String text = "<code>" + escape(item.expression()) + "</code>";
+            if (item.entity() != null)
+                text = message(locale, "task.ofEntity", text, "<strong>" + escape(item.entity()) + "</strong>");
+            String finalName = useColumns ? columns.get(i) : item.alias();
+            if (finalName != null && !finalName.equals(item.expression()))
+                text = message(locale, "task.alias", text, "<code>" + escape(finalName) + "</code>");
+            sb.append(text);
+        }
+        return sb.toString();
+    }
+
     private void appendOrder(StringBuilder sb, Locale locale, List<CypherQueryStructure.OrderItem> order) {
         StringBuilder items = new StringBuilder();
         for (int i = 0; i < order.size(); i++) {
             if (i > 0) items.append(", ");
             CypherQueryStructure.OrderItem item = order.get(i);
-            items.append("<code>").append(escape(item.expression())).append("</code>");
+            String text = "<code>" + escape(item.expression()) + "</code>";
+            if (item.entity() != null)
+                text = message(locale, "task.ofEntity", text, "<strong>" + escape(item.entity()) + "</strong>");
+            items.append(text);
             items.append(" (").append(message(locale, item.descending() ? "task.order.desc" : "task.order.asc")).append(")");
         }
         appendListItem(sb, locale, "task.section.order", message(locale, "task.order.by", items.toString()));

@@ -2,6 +2,7 @@ package at.jku.dke.task_app.cypher.evaluation.model;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -26,7 +27,38 @@ public class CypherComparison {
         this.renamedSubmissionKeys = applyMapping(submission.keys(), this.nearMatches);
         this.keysCorrect = solution.keys().equals(submission.keys());
         this.rowsCorrect = this.keysCorrect && solution.rowMultiset().equals(submission.rowMultiset());
-        this.orderCorrect = !orderRelevant || solution.canonicalRows().equals(submission.canonicalRows());
+        this.orderCorrect = !orderRelevant || orderPreserved(solution.canonicalRows(), submission.canonicalRows());
+    }
+    private static boolean orderPreserved(List<List<String>> expected, List<List<String>> actual) {
+        Map<List<String>, Long> expectedCounts = counts(expected);
+        Map<List<String>, Long> actualCounts = counts(actual);
+        Map<List<String>, Long> common = new HashMap<>();
+        for (Map.Entry<List<String>, Long> entry : expectedCounts.entrySet()) {
+            long min = Math.min(entry.getValue(), actualCounts.getOrDefault(entry.getKey(), 0L));
+            if (min > 0)
+                common.put(entry.getKey(), min);
+        }
+        return filterToCommon(expected, common).equals(filterToCommon(actual, common));
+    }
+
+    private static Map<List<String>, Long> counts(List<List<String>> rows) {
+        Map<List<String>, Long> counts = new HashMap<>();
+        for (List<String> row : rows)
+            counts.merge(row, 1L, Long::sum);
+        return counts;
+    }
+
+    private static List<List<String>> filterToCommon(List<List<String>> rows, Map<List<String>, Long> common) {
+        Map<List<String>, Long> remaining = new HashMap<>(common);
+        List<List<String>> result = new ArrayList<>();
+        for (List<String> row : rows) {
+            Long left = remaining.get(row);
+            if (left != null && left > 0) {
+                remaining.put(row, left - 1);
+                result.add(row);
+            }
+        }
+        return result;
     }
 
     public boolean isCorrect() {
@@ -51,6 +83,10 @@ public class CypherComparison {
 
     public List<String> keys() {
         return this.solution.keys();
+    }
+
+    public CypherQueryResult submissionResult() {
+        return this.submission;
     }
 
     public int expectedRowCount() {

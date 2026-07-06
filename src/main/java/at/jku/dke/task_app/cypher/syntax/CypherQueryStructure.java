@@ -7,6 +7,7 @@ public record CypherQueryStructure(List<NodePattern> nodes,
                                    List<String> filters,
                                    boolean distinct,
                                    boolean aggregated,
+                                   List<ReturnItem> returnItems,
                                    List<OrderItem> orderBy,
                                    String skip,
                                    String limit,
@@ -18,7 +19,10 @@ public record CypherQueryStructure(List<NodePattern> nodes,
     public record RelationshipPattern(List<String> type, List<String> sourceLabels, List<String> targetLabels, boolean directed) {
     }
 
-    public record OrderItem(String expression, boolean descending) {
+    public record ReturnItem(String expression, String entity, String alias) {
+    }
+
+    public record OrderItem(String expression, String entity, boolean descending) {
     }
 
     public boolean isEmpty() {

@@ -79,4 +79,30 @@ class CypherTaskDescriptionBuilderTest {
         assertTrue(html.contains("Folgendes leistet"));
         assertTrue(html.contains("Zurückgeben"));
     }
+
+    @Test
+    void rendersEntityAndAliasForReturnColumns() {
+        String html = describe("MATCH (p:Person) RETURN p.name AS testname", List.of("testname"));
+        assertTrue(html.contains("<code>name</code> of <strong>Person</strong> as <code>testname</code>"));
+    }
+
+    @Test
+    void rendersEntityAndAliasForReturnColumnsInGerman() {
+        String html = builder.build(Locale.GERMAN,
+            analyzer.analyze("MATCH (p:Person) RETURN p.name AS testname"), List.of("testname"));
+        assertTrue(html.contains("<code>name</code> von <strong>Person</strong> als <code>testname</code>"));
+    }
+
+    @Test
+    void rendersEntityForOrderBy() {
+        String html = describe("MATCH (p:Person) RETURN p.name AS name ORDER BY p.name", List.of("name"));
+        assertTrue(html.contains("<code>name</code> of <strong>Person</strong> (ascending)"));
+    }
+
+    @Test
+    void omitsAliasWhenColumnNameEqualsProperty() {
+        String html = describe("MATCH (p:Person) RETURN p.name AS name", List.of("name"));
+        assertTrue(html.contains("<code>name</code> of <strong>Person</strong>"));
+        assertFalse(html.contains(" as <code>name</code>"));
+    }
 }

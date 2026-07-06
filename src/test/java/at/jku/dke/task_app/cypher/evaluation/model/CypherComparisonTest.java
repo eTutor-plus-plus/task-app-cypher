@@ -87,6 +87,39 @@ class CypherComparisonTest {
     }
 
     @Test
+    void superfluousRowWithPreservedOrderKeepsOrderCorrect() {
+        var comparison = new CypherComparison(
+            result(List.of("name"), List.of(row("Alice"), row("Bob"))),
+            result(List.of("name"), List.of(row("Alice"), row("Bob"), row("Carol"))),
+            true);
+
+        assertFalse(comparison.rowsCorrect());
+        assertTrue(comparison.orderCorrect());
+    }
+
+    @Test
+    void superfluousRowWithSwappedCommonRowsMakesOrderIncorrect() {
+        var comparison = new CypherComparison(
+            result(List.of("name"), List.of(row("Bob"), row("Alice"))),
+            result(List.of("name"), List.of(row("Alice"), row("Bob"), row("Carol"))),
+            true);
+
+        assertFalse(comparison.rowsCorrect());
+        assertFalse(comparison.orderCorrect());
+    }
+
+    @Test
+    void missingRowDoesNotAffectOrderOfRemainingRows() {
+        var comparison = new CypherComparison(
+            result(List.of("name"), List.of(row("Alice"), row("Bob"), row("Carol"))),
+            result(List.of("name"), List.of(row("Alice"), row("Carol"))),
+            true);
+
+        assertFalse(comparison.rowsCorrect());
+        assertTrue(comparison.orderCorrect());
+    }
+
+    @Test
     void solutionKeyAlreadyMatchedExactlyIsNotReusedForTypo() {
         var comparison = new CypherComparison(
             result(List.of("name"), List.of(row("Alice"))),

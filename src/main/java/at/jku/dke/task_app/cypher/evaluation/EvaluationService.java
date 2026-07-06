@@ -54,50 +54,44 @@ public class EvaluationService {
         LOG.info("Evaluating Cypher query for task {} with mode {} and feedback-level {} ({} alternatives)",
             submission.taskId(), submission.mode(), submission.feedbackLevel(), task.getAlternativeSolutions().size());
         Locale locale = Locale.of(submission.language());
-        String setupStatements = task.getTaskGroup().getSetupStatements();
-        String secondarySetupStatements = task.getTaskGroup().getSecondarySetupStatements();
+       String setupStatements = submission.mode() == SubmissionMode.SUBMIT
+            ? task.getTaskGroup().getSecondarySetupStatements()
+            : task.getTaskGroup().getSetupStatements();
+        if (setupStatements == null || setupStatements.isBlank())
+            setupStatements = task.getTaskGroup().getSetupStatements();
         String submittedQuery = submission.submission().input();
 
         if (submission.mode() == SubmissionMode.RUN)
             return this.run(task.getMaxPoints(), setupStatements, submittedQuery, locale);
 
         if (task.getEvaluationMode() == CypherEvaluationMode.MULTI_SOLUTION)
-            return this.evaluateMultiSolution(task, setupStatements, secondarySetupStatements, submittedQuery, submission.mode(), submission.feedbackLevel(), locale);
-        return this.evaluatePenalty(task, setupStatements, secondarySetupStatements, submittedQuery, submission.mode(), submission.feedbackLevel(), locale);
+            return this.evaluateMultiSolution(task, setupStatements, submittedQuery, submission.mode(), submission.feedbackLevel(), locale);
+        return this.evaluatePenalty(task, setupStatements, submittedQuery, submission.mode(), submission.feedbackLevel(), locale);
     }
 
-    private GradingDto evaluatePenalty(CypherTask task, String setupStatements, String secondarySetupStatements,
+    private GradingDto evaluatePenalty(CypherTask task, String setupStatements,
                                        String submittedQuery, SubmissionMode mode, int feedbackLevel, Locale locale) {
-        CypherComparison primary;
+        CypherComparison comparison;
         try {
-            primary = this.analyzer.compare(setupStatements, task.getSolution(), submittedQuery);
+            comparison = this.analyzer.compare(setupStatements, task.getSolution(), submittedQuery);
         } catch (CypherValidationException | CypherResultLimitExceededException | Neo4jException ex) {
             return this.failed(task.getMaxPoints(), CypherGrading.forSyntaxError(task).getPoints(), locale, ex);
         }
 
-        // secondary check nur wenn das erste stimmt, sonst überflüssiger check wenn die ersten schon nicht zusammenpassen
-        if (primary.isCorrect()) {
-            boolean secondaryCorrect;
-            try {
-                secondaryCorrect = this.analyzer.compare(secondarySetupStatements, task.getSolution(), submittedQuery).isCorrect();
-            } catch (CypherValidationException | CypherResultLimitExceededException | Neo4jException ex) {
-                LOG.warn("Secondary-graph evaluation failed for task {}: {}", task.getId(), ex.getMessage());
-                secondaryCorrect = false;
-            }
-            if (!secondaryCorrect)
-                return this.secondaryMismatch(task.getMaxPoints(), locale);
-        }
+        // A near-matching column name (typo hint) counts as a syntax error; the submission is not graded.
+        if (!comparison.nearMatches().isEmpty())
+            return this.typoSyntaxError(task.getMaxPoints(), comparison, locale);
 
-        CypherGrading grading = CypherGrading.of(task, primary);
+        CypherGrading grading = CypherGrading.of(task, comparison);
         String feedback = this.messageSource.getMessage(
             grading.isCorrect() ? (mode == SubmissionMode.SUBMIT ? "correct" : "possiblyCorrect") : "incorrect",
             null,
             locale);
-        List<CriterionDto> criteria = this.createComparisonCriteria(primary, mode, feedbackLevel, grading, locale);
+        List<CriterionDto> criteria = this.createComparisonCriteria(comparison, mode, feedbackLevel, grading, locale);
         return new GradingDto(task.getMaxPoints(), grading.getPoints(), feedback, criteria);
     }
 
-    private GradingDto evaluateMultiSolution(CypherTask task, String setupStatements, String secondarySetupStatements,
+    private GradingDto evaluateMultiSolution(CypherTask task, String setupStatements,
                                              String submittedQuery, SubmissionMode mode, int feedbackLevel, Locale locale) {
         List<CypherTaskAlternativeSolution> alternatives = new ArrayList<>(task.getAlternativeSolutions());
         alternatives.sort(Comparator.comparing(CypherTaskAlternativeSolution::getPointsPercent).reversed());
@@ -131,16 +125,13 @@ public class EvaluationService {
             return this.failed(task.getMaxPoints(), BigDecimal.ZERO, locale, (RuntimeException) firstFailure);
         }
 
-        if (matchedIndex >= 0) {
-            boolean secondaryCorrect;
-            try {
-                secondaryCorrect = this.analyzer.compare(secondarySetupStatements, alternatives.get(matchedIndex).getSolution(), submittedQuery).isCorrect();
-            } catch (CypherValidationException | CypherResultLimitExceededException | Neo4jException ex) {
-                LOG.warn("Secondary-graph evaluation failed for task {} stage {}: {}", task.getId(), matchedIndex, ex.getMessage());
-                secondaryCorrect = false;
-            }
-            if (!secondaryCorrect)
-                return this.secondaryMismatch(task.getMaxPoints(), locale);
+        if (matchedIndex < 0) {
+            CypherComparison typo = comparisons.stream()
+                .filter(c -> c != null && !c.nearMatches().isEmpty())
+                .findFirst()
+                .orElse(null);
+            if (typo != null)
+                return this.typoSyntaxError(task.getMaxPoints(), typo, locale);
         }
 
         BigDecimal points = matchedIndex >= 0
@@ -163,28 +154,27 @@ public class EvaluationService {
         criteria.add(this.syntaxCriterion(locale, true, this.messageSource.getMessage("criterium.syntax.valid", null, locale)));
 
         boolean perfectMatch = matchedIndex >= 0 && alternatives.get(matchedIndex).getPointsPercent().compareTo(HUNDRED) == 0;
-        if (feedbackLevel < 2 || perfectMatch)
-            return criteria;
+        if (feedbackLevel >= 2 && !perfectMatch) {
+            int diffStage = matchedIndex > 0 ? matchedIndex - 1 : 0;
+            CypherComparison diff = comparisons.size() > diffStage ? comparisons.get(diffStage) : null;
+            if (diff != null)
+                appendComparisonDetails(criteria, diff, feedbackLevel, mode, locale, Map.of());
+        }
 
-        int diffStage = matchedIndex > 0 ? matchedIndex - 1 : 0;
-        CypherComparison diff = comparisons.size() > diffStage ? comparisons.get(diffStage) : null;
-        if (diff == null)
-            return criteria;
+        if (mode != SubmissionMode.SUBMIT) {
+            CypherComparison any = comparisons.stream().filter(c -> c != null).findFirst().orElse(null);
+            if (any != null)
+                this.appendResultTable(criteria, any.submissionResult(), perfectMatch, locale);
+        }
 
-        appendComparisonDetails(criteria, diff, feedbackLevel, mode, locale, /*awardDeductions*/ false);
         return criteria;
     }
 
     private void appendComparisonDetails(List<CriterionDto> target, CypherComparison comparison, int feedbackLevel,
-                                          SubmissionMode mode, Locale locale, boolean awardDeductions) {
-        Map<CypherEvaluationCriterion, BigDecimal> deductions = awardDeductions ? new EnumMap<>(CypherEvaluationCriterion.class) : Map.of();
-
-        if (!comparison.nearMatches().isEmpty())
-            this.addCriterion(target, "criterium.columns.typo", null, true, this.createTypoFeedback(comparison, locale), locale);
-
+                                          SubmissionMode mode, Locale locale, Map<CypherEvaluationCriterion, BigDecimal> deductions) {
         if (!comparison.keysCorrect()) {
             this.addCriterion(target, "criterium.columns",
-                awardDeductions ? negatedDeduction(deductions, CypherEvaluationCriterion.CORRECT_COLUMNS, mode) : null,
+                negatedDeduction(deductions, CypherEvaluationCriterion.CORRECT_COLUMNS, mode),
                 false, this.createColumnFeedback(comparison, locale), locale);
             return;
         }
@@ -198,27 +188,17 @@ public class EvaluationService {
 
         if (!comparison.missingRows().isEmpty())
             this.addCriterion(target, "criterium.rows.missing",
-                awardDeductions ? negatedDeduction(deductions, CypherEvaluationCriterion.MISSING_ROWS, mode) : null,
+                negatedDeduction(deductions, CypherEvaluationCriterion.MISSING_ROWS, mode),
                 false, this.createRowsFeedback("missing", comparison.missingRows(), comparison.keys(), feedbackLevel, locale), locale);
         if (!comparison.superfluousRows().isEmpty())
             this.addCriterion(target, "criterium.rows.superfluous",
-                awardDeductions ? negatedDeduction(deductions, CypherEvaluationCriterion.SUPERFLUOUS_ROWS, mode) : null,
+                negatedDeduction(deductions, CypherEvaluationCriterion.SUPERFLUOUS_ROWS, mode),
                 false, this.createRowsFeedback("superfluous", comparison.superfluousRows(), comparison.keys(), feedbackLevel, locale), locale);
-        if (comparison.rowsCorrect() && comparison.orderRelevant() && !comparison.orderCorrect())
+        if (comparison.orderRelevant() && !comparison.orderCorrect())
             this.addCriterion(target, "criterium.order",
-                awardDeductions ? negatedDeduction(deductions, CypherEvaluationCriterion.CORRECT_ORDER, mode) : null,
-                false, this.messageSource.getMessage("criterium.order.invalid", null, locale), locale);
-    }
-
-    private GradingDto secondaryMismatch(BigDecimal maxPoints, Locale locale) {
-        List<CriterionDto> criteria = new ArrayList<>();
-        criteria.add(this.syntaxCriterion(locale, true, this.messageSource.getMessage("criterium.syntax.valid", null, locale)));
-        criteria.add(new CriterionDto(
-            this.messageSource.getMessage("criterium.result", null, locale),
-            null,
-            false,
-            this.messageSource.getMessage("criterium.result.incorrect", null, locale)));
-        return new GradingDto(maxPoints, BigDecimal.ZERO, this.messageSource.getMessage("incorrect", null, locale), criteria);
+                negatedDeduction(deductions, CypherEvaluationCriterion.CORRECT_ORDER, mode),
+                false, this.messageSource.getMessage(
+                    comparison.rowsCorrect() ? "criterium.order.invalid" : "criterium.order.invalidRows", null, locale), locale);
     }
 
     private GradingDto run(BigDecimal maxPoints, String setupStatements, String submittedQuery, Locale locale) {
@@ -241,44 +221,25 @@ public class EvaluationService {
         List<CriterionDto> criteria = new ArrayList<>();
         criteria.add(this.syntaxCriterion(locale, true, this.messageSource.getMessage("criterium.syntax.valid", null, locale)));
 
-        if (feedbackLevel <= 0)
-            return criteria;
-
-        Map<CypherEvaluationCriterion, BigDecimal> deductions = new EnumMap<>(CypherEvaluationCriterion.class);
-        for (CypherGrading.Entry entry : grading.getDetails())
-            deductions.put(entry.criterion(), entry.minusPoints());
-
-        if (!comparison.nearMatches().isEmpty())
-            this.addCriterion(criteria, "criterium.columns.typo", null, true, this.createTypoFeedback(comparison, locale), locale);
-
-        if (!comparison.keysCorrect()) {
-            this.addCriterion(criteria, "criterium.columns",
-                negatedDeduction(deductions, CypherEvaluationCriterion.CORRECT_COLUMNS, mode),
-                false, this.createColumnFeedback(comparison, locale), locale);
-            return criteria;
+        if (feedbackLevel > 0) {
+            Map<CypherEvaluationCriterion, BigDecimal> deductions = new EnumMap<>(CypherEvaluationCriterion.class);
+            for (CypherGrading.Entry entry : grading.getDetails())
+                deductions.put(entry.criterion(), entry.minusPoints());
+            this.appendComparisonDetails(criteria, comparison, feedbackLevel, mode, locale, deductions);
         }
 
-        boolean rowDiff = !comparison.missingRows().isEmpty() || !comparison.superfluousRows().isEmpty();
-        if (feedbackLevel >= 2 && rowDiff)
-            this.addCriterion(criteria, "criterium.rows.count", null, true,
-                this.messageSource.getMessage("criterium.rows.count.text",
-                    new Object[]{comparison.expectedRowCount(), comparison.actualRowCount()}, locale),
-                locale);
-
-        if (!comparison.missingRows().isEmpty())
-            this.addCriterion(criteria, "criterium.rows.missing",
-                negatedDeduction(deductions, CypherEvaluationCriterion.MISSING_ROWS, mode),
-                false, this.createRowsFeedback("missing", comparison.missingRows(), comparison.keys(), feedbackLevel, locale), locale);
-        if (!comparison.superfluousRows().isEmpty())
-            this.addCriterion(criteria, "criterium.rows.superfluous",
-                negatedDeduction(deductions, CypherEvaluationCriterion.SUPERFLUOUS_ROWS, mode),
-                false, this.createRowsFeedback("superfluous", comparison.superfluousRows(), comparison.keys(), feedbackLevel, locale), locale);
-        if (comparison.rowsCorrect() && comparison.orderRelevant() && !comparison.orderCorrect())
-            this.addCriterion(criteria, "criterium.order",
-                negatedDeduction(deductions, CypherEvaluationCriterion.CORRECT_ORDER, mode),
-                false, this.messageSource.getMessage("criterium.order.invalid", null, locale), locale);
+        if (mode != SubmissionMode.SUBMIT)
+            this.appendResultTable(criteria, comparison.submissionResult(), grading.isCorrect(), locale);
 
         return criteria;
+    }
+
+    private void appendResultTable(List<CriterionDto> criteria, CypherQueryResult result, boolean passed, Locale locale) {
+        criteria.add(new CriterionDto(
+            this.messageSource.getMessage("criterium.result", null, locale),
+            null,
+            passed,
+            HtmlTableRenderer.render(result)));
     }
 
     private void addCriterion(List<CriterionDto> criteria, String key, BigDecimal points, boolean passed, String feedback, Locale locale) {
@@ -290,6 +251,13 @@ public class EvaluationService {
             return null;
         BigDecimal d = deductions.get(criterion);
         return d == null ? null : d.negate();
+    }
+
+    private GradingDto typoSyntaxError(BigDecimal maxPoints, CypherComparison comparison, Locale locale) {
+        List<CriterionDto> criteria = new ArrayList<>();
+        criteria.add(this.syntaxCriterion(locale, false,
+            this.messageSource.getMessage("criterium.syntax.invalid", null, locale) + "<br>" + this.createTypoFeedback(comparison, locale)));
+        return new GradingDto(maxPoints, BigDecimal.ZERO, this.messageSource.getMessage("syntaxError", null, locale), criteria);
     }
 
     private String createTypoFeedback(CypherComparison comparison, Locale locale) {
