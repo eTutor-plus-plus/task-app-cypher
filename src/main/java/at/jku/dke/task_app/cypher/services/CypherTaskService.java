@@ -23,7 +23,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
-import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
@@ -65,8 +64,7 @@ public class CypherTaskService extends BaseTaskInGroupService<CypherTask, Cypher
             data.superfluousColumnsPenalty(),
             data.missingRowsPenalty(),
             data.superfluousRowsPenalty(),
-            data.wrongOrderPenalty(),
-            this.resolveExpectedColumnNames(data.expectedColumnNames(), primarySolution));
+            data.wrongOrderPenalty());
         task.setEvaluationMode(mode);
         if (mode == CypherEvaluationMode.MULTI_SOLUTION)
             task.replaceAlternativeSolutions(data.alternativeSolutionsOrEmpty());
@@ -90,7 +88,6 @@ public class CypherTaskService extends BaseTaskInGroupService<CypherTask, Cypher
         task.setMissingRowsPenalty(data.missingRowsPenalty());
         task.setSuperfluousRowsPenalty(data.superfluousRowsPenalty());
         task.setWrongOrderPenalty(data.wrongOrderPenalty());
-        task.setExpectedColumnNames(this.resolveExpectedColumnNames(data.expectedColumnNames(), primarySolution));
         if (mode == CypherEvaluationMode.MULTI_SOLUTION)
             task.replaceAlternativeSolutions(data.alternativeSolutionsOrEmpty());
         else
@@ -152,41 +149,11 @@ public class CypherTaskService extends BaseTaskInGroupService<CypherTask, Cypher
     }
 
     private List<String> resolveColumns(CypherTask task) {
-        String manual = task.getExpectedColumnNames();
-        if (manual != null && !manual.isBlank()) {
-            List<String> parsed = new ArrayList<>();
-            for (String entry : manual.split(",")) {
-                String trimmed = entry.trim();
-                if (!trimmed.isEmpty())
-                    parsed.add(trimmed);
-            }
-            if (!parsed.isEmpty())
-                return parsed;
-        }
-
         try {
             return this.columnExtractor.extractColumnNames(task.getSolution());
         } catch (CypherValidationException ex) {
             LOG.warn("Could not auto-derive RETURN columns from solution: {}", ex.getMessage());
             return List.of();
         }
-    }
-
-    private String resolveExpectedColumnNames(String manual, String solution) {
-        String normalized = normalize(manual);
-        if (normalized != null)
-            return normalized;
-        try {
-            return String.join(", ", this.columnExtractor.extractColumnNames(solution));
-        } catch (CypherValidationException ex) {
-            LOG.warn("Could not auto-derive RETURN columns from solution: {}", ex.getMessage());
-            return null;
-        }
-    }
-
-    private static String normalize(String value) {
-        if (value == null) return null;
-        String trimmed = value.trim();
-        return trimmed.isEmpty() ? null : trimmed;
     }
 }

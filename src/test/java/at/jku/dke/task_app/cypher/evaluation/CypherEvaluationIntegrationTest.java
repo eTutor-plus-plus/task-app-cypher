@@ -72,8 +72,7 @@ class CypherEvaluationIntegrationTest {
             BigDecimal.valueOf(100),
             BigDecimal.valueOf(100),
             BigDecimal.valueOf(100),
-            BigDecimal.valueOf(100),
-            null);
+            BigDecimal.valueOf(100));
         penaltyTask.setId(PENALTY_TASK_ID);
         penaltyTask.setTaskGroup(taskGroup);
         penaltyTask.setMaxPoints(BigDecimal.TEN);
@@ -84,8 +83,7 @@ class CypherEvaluationIntegrationTest {
             BigDecimal.valueOf(100),
             BigDecimal.valueOf(100),
             BigDecimal.valueOf(100),
-            BigDecimal.valueOf(100),
-            null);
+            BigDecimal.valueOf(100));
         multiTask.setId(MULTI_TASK_ID);
         multiTask.setTaskGroup(taskGroup);
         multiTask.setMaxPoints(BigDecimal.TEN);
@@ -102,8 +100,7 @@ class CypherEvaluationIntegrationTest {
             BigDecimal.valueOf(100),
             BigDecimal.valueOf(100),
             BigDecimal.valueOf(100),
-            BigDecimal.valueOf(100),
-            null);
+            BigDecimal.valueOf(100));
         multiUnsortedTask.setId(MULTI_UNSORTED_TASK_ID);
         multiUnsortedTask.setTaskGroup(taskGroup);
         multiUnsortedTask.setMaxPoints(BigDecimal.TEN);

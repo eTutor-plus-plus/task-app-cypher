@@ -30,7 +30,6 @@ public class TaskController extends BaseTaskController<CypherTask, CypherTaskDto
             task.getMissingRowsPenalty(),
             task.getSuperfluousRowsPenalty(),
             task.getWrongOrderPenalty(),
-            task.getExpectedColumnNames(),
             alternatives);
     }
 

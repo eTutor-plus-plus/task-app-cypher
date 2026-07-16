@@ -185,7 +185,7 @@ class CypherGradingTest {
     }
 
     private static CypherTask task(BigDecimal cols, BigDecimal missing, BigDecimal superfluous, BigDecimal order) {
-        var task = new CypherTask("MATCH (n) RETURN n", cols, missing, superfluous, order, null);
+        var task = new CypherTask("MATCH (n) RETURN n", cols, missing, superfluous, order);
         task.setMaxPoints(MAX);
         return task;
     }

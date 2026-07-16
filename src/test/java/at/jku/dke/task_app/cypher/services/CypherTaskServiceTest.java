@@ -57,7 +57,7 @@ class CypherTaskServiceTest {
             CypherEvaluationMode.PENALTY,
             "MATCH (p:Person) RETURN p.name AS name",
             new BigDecimal("100"), new BigDecimal("100"), new BigDecimal("100"), new BigDecimal("100"),
-            null, null);
+            null);
 
         CypherTask task = invokeCreate(123L, modifyDto(data));
 
@@ -146,8 +146,7 @@ class CypherTaskServiceTest {
     void updateTaskFromPenaltyToMultiClearsThenReplacesAlternatives() {
         CypherTask existing = new CypherTask(
             "MATCH (p:Person) RETURN p.name AS name",
-            new BigDecimal("100"), new BigDecimal("100"), new BigDecimal("100"), new BigDecimal("100"),
-            null);
+            new BigDecimal("100"), new BigDecimal("100"), new BigDecimal("100"), new BigDecimal("100"));
         existing.setTaskGroup(new CypherTaskGroup("CREATE (:X);", "CREATE (:Y);"));
         existing.setMaxPoints(BigDecimal.TEN);
         existing.setStatus(TaskStatus.APPROVED);
@@ -168,8 +167,7 @@ class CypherTaskServiceTest {
     void updateTaskFromMultiToPenaltyDropsAlternatives() {
         CypherTask existing = new CypherTask(
             "old",
-            new BigDecimal("100"), new BigDecimal("100"), new BigDecimal("100"), new BigDecimal("100"),
-            null);
+            new BigDecimal("100"), new BigDecimal("100"), new BigDecimal("100"), new BigDecimal("100"));
         existing.setTaskGroup(new CypherTaskGroup("CREATE (:X);", "CREATE (:Y);"));
         existing.setMaxPoints(BigDecimal.TEN);
         existing.setStatus(TaskStatus.APPROVED);
@@ -183,7 +181,7 @@ class CypherTaskServiceTest {
             CypherEvaluationMode.PENALTY,
             "MATCH (p:Person) RETURN p.name AS name",
             new BigDecimal("100"), new BigDecimal("100"), new BigDecimal("100"), new BigDecimal("100"),
-            null, null);
+            null);
 
         invokeUpdate(existing, modifyDto(data));
 
@@ -198,7 +196,7 @@ class CypherTaskServiceTest {
             null,
             "MATCH (p:Person) RETURN p.name AS name",
             new BigDecimal("100"), new BigDecimal("100"), new BigDecimal("100"), new BigDecimal("100"),
-            null, null);
+            null);
 
         CypherTask task = invokeCreate(1L, modifyDto(data));
         assertEquals(CypherEvaluationMode.PENALTY, task.getEvaluationMode());
@@ -209,7 +207,6 @@ class CypherTaskServiceTest {
             CypherEvaluationMode.MULTI_SOLUTION,
             null,
             new BigDecimal("100"), new BigDecimal("100"), new BigDecimal("100"), new BigDecimal("100"),
-            null,
             alternatives);
     }
 

@@ -39,9 +39,6 @@ public class CypherTask extends BaseTaskInGroup<CypherTaskGroup> {
     @Column(name = "wrong_order_penalty", precision = 5, scale = 2, nullable = false)
     private BigDecimal wrongOrderPenalty;
 
-    @Column(name = "expected_column_names", columnDefinition = "TEXT")
-    private String expectedColumnNames;
-
     @NotNull
     @Enumerated(EnumType.STRING)
     @Column(name = "evaluation_mode", nullable = false, length = 32)
@@ -58,14 +55,12 @@ public class CypherTask extends BaseTaskInGroup<CypherTaskGroup> {
                       BigDecimal superfluousColumnsPenalty,
                       BigDecimal missingRowsPenalty,
                       BigDecimal superfluousRowsPenalty,
-                      BigDecimal wrongOrderPenalty,
-                      String expectedColumnNames) {
+                      BigDecimal wrongOrderPenalty) {
         this.solution = solution;
         this.superfluousColumnsPenalty = superfluousColumnsPenalty;
         this.missingRowsPenalty = missingRowsPenalty;
         this.superfluousRowsPenalty = superfluousRowsPenalty;
         this.wrongOrderPenalty = wrongOrderPenalty;
-        this.expectedColumnNames = expectedColumnNames;
     }
 
     public String getSolution() {
@@ -106,14 +101,6 @@ public class CypherTask extends BaseTaskInGroup<CypherTaskGroup> {
 
     public void setWrongOrderPenalty(BigDecimal wrongOrderPenalty) {
         this.wrongOrderPenalty = wrongOrderPenalty;
-    }
-
-    public String getExpectedColumnNames() {
-        return expectedColumnNames;
-    }
-
-    public void setExpectedColumnNames(String expectedColumnNames) {
-        this.expectedColumnNames = expectedColumnNames;
     }
 
     public CypherEvaluationMode getEvaluationMode() {

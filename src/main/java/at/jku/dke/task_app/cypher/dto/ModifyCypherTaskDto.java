@@ -17,7 +17,6 @@ public record ModifyCypherTaskDto(
     @NotNull @DecimalMin("0") @DecimalMax("100") BigDecimal missingRowsPenalty,
     @NotNull @DecimalMin("0") @DecimalMax("100") BigDecimal superfluousRowsPenalty,
     @NotNull @DecimalMin("0") @DecimalMax("100") BigDecimal wrongOrderPenalty,
-    String expectedColumnNames,
     @Valid List<AlternativeSolutionDto> alternativeSolutions
 ) implements Serializable {
 
