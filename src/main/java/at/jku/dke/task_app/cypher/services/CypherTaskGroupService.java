@@ -27,7 +27,6 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.Base64;
 import java.util.Locale;
-import java.util.Objects;
 
 @Service
 public class CypherTaskGroupService extends BaseTaskGroupService<CypherTaskGroup, ModifyCypherTaskGroupDto> {
@@ -62,7 +61,7 @@ public class CypherTaskGroupService extends BaseTaskGroupService<CypherTaskGroup
         this.statementValidator.validateSetupScript(secondarySetup);
 
         CypherTaskGroup taskGroup = new CypherTaskGroup(setupStatements, secondarySetup);
-        this.refreshGraphImages(taskGroup, true);
+        this.refreshGraphImages(taskGroup);
         return taskGroup;
     }
 
@@ -76,12 +75,10 @@ public class CypherTaskGroupService extends BaseTaskGroupService<CypherTaskGroup
         this.statementValidator.validateSetupScript(newSetup);
         this.statementValidator.validateSetupScript(newSecondarySetup);
 
-        boolean setupChanged = !Objects.equals(taskGroup.getSetupStatements(), newSetup);
         taskGroup.setSetupStatements(newSetup);
         taskGroup.setSecondarySetupStatements(newSecondarySetup);
 
-        boolean rerender = setupChanged || taskGroup.getImageBase64De() == null || taskGroup.getImageBase64En() == null;
-        this.refreshGraphImages(taskGroup, rerender);
+        this.refreshGraphImages(taskGroup);
     }
 
     @Override
@@ -101,13 +98,10 @@ public class CypherTaskGroupService extends BaseTaskGroupService<CypherTaskGroup
         }
     }
 
-    private void refreshGraphImages(CypherTaskGroup taskGroup, boolean rerenderImages) {
+    private void refreshGraphImages(CypherTaskGroup taskGroup) {
         try {
             GraphSnapshot snapshot = this.analyzer.extractGraph(taskGroup.getSetupStatements());
             taskGroup.setImageTruncated(snapshot.truncated());
-
-            if (!rerenderImages)
-                return;
 
             if (snapshot.nodes().isEmpty()) {
                 taskGroup.setImageBase64De(null);
